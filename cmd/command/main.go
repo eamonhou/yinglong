@@ -24,14 +24,16 @@ func main() {
 	passFilepath := filepath.Join(appDir, "config", "password.json")
 	ylSettingger := internal.NewSettingger("simple")
 
-	// 命令审核员
-	denyCommandList, denyFileList, err := ylSettingger.ReadDenySetting(passFilepath)
+	// 命令审核者
+	denyFilepath := filepath.Join(appDir, "config", "deny.json")
+	denyCommandList, denyFileList, err := ylSettingger.ReadDenySetting(denyFilepath)
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "读取黑名单设置失败，%s", err.Error())
 		return
 	}
-	commandAuditor := internal.NewAuditor("simple")
-	commandAuditor.SetDenyCommandList(denyCommandList).SetDenyFileList(denyFileList)
+	commandAuditor := internal.NewAuditor("simple").
+		SetDenyCommandList(denyCommandList).
+		SetDenyFileList(denyFileList)
 
 	// 密码注入器
 	secrets, err := ylSettingger.ReadPasswordSetting(passFilepath)

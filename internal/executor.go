@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // Executer 命令执行方式
@@ -56,7 +58,22 @@ func (obj *OnceExecutor) Execute() error {
 	}
 	args := os.Args[1:]
 
-	obj.RawCommand = args[0]
+	// 确保不是递归调用自己
+	const recursiveEnv = "YINGLONG_NESTED"
+	if os.Getenv(recursiveEnv) == "1" {
+		fmt.Fprintf(os.Stdout, "拦截到递归调用：禁止在 yinglong 内部再次运行 yinglong\n")
+		return nil
+	}
+
+	selfPath, _ := os.Executable()
+	selfName := filepath.Base(selfPath)
+	if filepath.Base(args[0]) == selfName {
+		fmt.Fprintf(os.Stdout, "禁止直接递归：命令中包含 %s\n", selfName)
+		return nil
+	}
+
+	// 生成完整命令
+	obj.RawCommand = strings.Join(args, " ")
 
 	// 审核命令
 	if pass, _ := obj.auditor.AuditCommand(obj.RawCommand); !pass {
@@ -70,6 +87,11 @@ func (obj *OnceExecutor) Execute() error {
 	// 创建一个命令对象
 	// 使用 sh -c 可以让你执行带管道的复杂命令
 	obj.Cmd = exec.Command("sh", "-c", obj.FinalCommand)
+
+	// 注入防止递归的环境变量
+	obj.Cmd.Env = append(os.Environ(), recursiveEnv+"=1")
+
+	obj.logger.Print("info", obj.FinalCommand)
 
 	// 将子进程的标准输出/错误直接关联到当前进程
 	obj.Cmd.Stdout = os.Stdout

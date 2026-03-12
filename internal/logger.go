@@ -39,6 +39,8 @@ func (obj *SimpleLog) SetFile(filepath string) Logger {
 	if err != nil {
 		return nil
 	}
+	defer fp.Close()
+
 	obj.filepath = filepath
 	obj.fp = fp
 	return obj

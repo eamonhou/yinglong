@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 	"yinglong/internal"
 )
 
 func main() {
+	ctx := context.Background()
+
 	// 获取程序所在目录的绝对路径
 	exePath, err := os.Executable()
 	if err != nil {
@@ -16,6 +20,9 @@ func main() {
 		return
 	}
 	appDir := filepath.Dir(exePath)
+
+	// DEV
+	// appDir = ""
 
 	// 初始化日志类
 	logFilepath := filepath.Join(appDir, "log", "yl_history.log")
@@ -58,11 +65,15 @@ func main() {
 
 	startAppWg.Wait()
 
+	// 设置命令执行超时时间
+	ctx, cancel := context.WithTimeout(ctx, time.Second*60*3)
+	defer cancel()
+
 	// 命令执行器
 	commandExecuter := internal.NewExecutor("simple").
 		SetLogger(ylLogger).
 		SetAuditor(commandAuditor).
 		SetInjector(passInjector)
 
-	commandExecuter.Execute()
+	commandExecuter.Execute(ctx)
 }

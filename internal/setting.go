@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"yinglong/cst"
 )
@@ -26,25 +25,53 @@ func NewSettingger(kind string) Settingger {
 }
 
 type SimpleSetting struct {
+	//
 }
 
 func NewSimpleSetting() *SimpleSetting {
 	return &SimpleSetting{}
 }
 
+// ReadPasswordSetting 读取密码设置
+//
+//	@param ctx
+//	@param filepath 配置文件路径
+//	@return map[string]string
+//	@return error
+func (obj *SimpleSetting) ReadPasswordSetting(filepath string) (map[string]string, error) {
+	passFp, err := os.OpenFile(filepath, os.O_RDONLY, 0666)
+	if err != nil {
+		return nil, err
+	}
+	defer passFp.Close()
+
+	result := make(map[string]string)
+	err = json.NewDecoder(passFp).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ReadDenySetting 读取黑名单设置
+//
+//	@param ctx
+//	@param filepath 黑名单文件路径
+//	@return map[string]struct{}
+//	@return map[string]struct{}
+//	@return error
 func (obj *SimpleSetting) ReadDenySetting(filepath string) (map[string]struct{}, map[string]struct{}, error) {
 	var denies map[string]interface{}
 
 	// 读取配置文件
-	denyFp, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDONLY, 0666)
+	denyFp, err := os.OpenFile(filepath, os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, nil, fmt.Errorf("打开黑名单配置文件失败：%w\n", err)
 	}
-	denyConfig, err := io.ReadAll(denyFp)
+	defer denyFp.Close()
+
+	err = json.NewDecoder(denyFp).Decode(&denies)
 	if err != nil {
-		return nil, nil, fmt.Errorf("读取黑名单配置失败：%w\n", err)
-	}
-	if err := json.Unmarshal(denyConfig, &denies); err != nil {
 		return nil, nil, fmt.Errorf("黑名单配置格式错误：%w\n", err)
 	}
 
@@ -80,20 +107,4 @@ func (obj *SimpleSetting) ReadDenySetting(filepath string) (map[string]struct{},
 		}
 	}
 	return denyCommandList, denyFileList, nil
-}
-
-func (obj *SimpleSetting) ReadPasswordSetting(filepath string) (map[string]string, error) {
-	passFp, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDONLY, 0666)
-	if err != nil {
-		return nil, err
-	}
-	passConfig, err := io.ReadAll(passFp)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]string)
-	if err := json.Unmarshal(passConfig, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }

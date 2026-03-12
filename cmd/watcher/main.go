@@ -23,9 +23,10 @@ func main() {
 
 	openClawConfigFilepath := filepath.Join(userDir, ".openclaw", "openclaw.json")
 
-	_, err = os.OpenFile(openClawConfigFilepath, os.O_RDONLY, 0666)
+	fp, err := os.OpenFile(openClawConfigFilepath, os.O_RDONLY, 0666)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	defer fp.Close()
 }

@@ -25,6 +25,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	defer mdFp.Close()
 
 	rulerContent, err := io.ReadAll(mdFp)
 	if err != nil {

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +11,7 @@ import (
 
 // Executer 命令执行方式
 type Executer interface {
-	Execute() error
+	Execute(ctx context.Context) error
 	SetLogger(logger Logger) Executer
 	SetAuditor(auditor Auditer) Executer
 	SetInjector(injector Injecter) Executer
@@ -51,7 +52,11 @@ func (obj *OnceExecutor) SetInjector(injector Injecter) Executer {
 	return obj
 }
 
-func (obj *OnceExecutor) Execute() error {
+// Execute 执行命令
+//
+//	@param ctx
+//	@return error
+func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stdout, "用法：yinglong <command>\n")
 		return nil
@@ -77,7 +82,7 @@ func (obj *OnceExecutor) Execute() error {
 
 	// 审核命令
 	if pass, _ := obj.auditor.AuditCommand(obj.RawCommand); !pass {
-		fmt.Fprintf(os.Stdout, "[%s] 命令禁止执行", obj.RawCommand)
+		fmt.Fprintf(os.Stdout, "%s 命令禁止执行\n", obj.RawCommand)
 		return nil
 	}
 
@@ -86,7 +91,7 @@ func (obj *OnceExecutor) Execute() error {
 
 	// 创建一个命令对象
 	// 使用 sh -c 可以让你执行带管道的复杂命令
-	obj.Cmd = exec.Command("sh", "-c", obj.FinalCommand)
+	obj.Cmd = exec.CommandContext(ctx, "sh", "-c", obj.FinalCommand)
 
 	// 注入防止递归的环境变量
 	obj.Cmd.Env = append(os.Environ(), recursiveEnv+"=1")
@@ -98,6 +103,13 @@ func (obj *OnceExecutor) Execute() error {
 	obj.Cmd.Stderr = os.Stderr
 
 	err := obj.Cmd.Run()
+
+	// 检查是否是超时导致退出
+	if ctx.Err() == context.DeadlineExceeded {
+		fmt.Fprintf(os.Stderr, "命令执行超时\n")
+		// 124 超时退出码
+		os.Exit(124)
+	}
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			os.Exit(exitError.ExitCode())

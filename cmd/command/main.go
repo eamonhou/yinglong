@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"yinglong/internal"
 )
 
@@ -11,7 +12,7 @@ func main() {
 	// 获取程序所在目录的绝对路径
 	exePath, err := os.Executable()
 	if err != nil {
-		fmt.Printf("获取程序路径失败：%v\n", err)
+		fmt.Fprintf(os.Stdout, "获取程序路径失败：%v\n", err)
 		return
 	}
 	appDir := filepath.Dir(exePath)
@@ -24,24 +25,38 @@ func main() {
 	passFilepath := filepath.Join(appDir, "config", "password.json")
 	ylSettingger := internal.NewSettingger("simple")
 
-	// 命令审核者
-	denyFilepath := filepath.Join(appDir, "config", "deny.json")
-	denyCommandList, denyFileList, err := ylSettingger.ReadDenySetting(denyFilepath)
-	if err != nil {
-		fmt.Fprintf(os.Stdout, "读取黑名单设置失败，%s", err.Error())
-		return
-	}
-	commandAuditor := internal.NewAuditor("simple").
-		SetDenyCommandList(denyCommandList).
-		SetDenyFileList(denyFileList)
+	startAppWg := &sync.WaitGroup{}
 
-	// 密码注入器
-	secrets, err := ylSettingger.ReadPasswordSetting(passFilepath)
-	if err != nil {
-		fmt.Fprintf(os.Stdout, "读取密码设置失败，%s", err.Error())
-		return
-	}
-	passInjector := internal.NewInjector("simple").SetRelationMap(secrets)
+	var passInjector internal.Injecter
+	startAppWg.Add(1)
+	go func() {
+		defer startAppWg.Done()
+		// 密码注入器
+		secrets, err := ylSettingger.ReadPasswordSetting(passFilepath)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "读取密码设置失败，%s", err.Error())
+			return
+		}
+		passInjector = internal.NewInjector("simple").SetRelationMap(secrets)
+	}()
+
+	var commandAuditor internal.Auditer
+	startAppWg.Add(1)
+	go func() {
+		defer startAppWg.Done()
+		// 命令审核者
+		denyFilepath := filepath.Join(appDir, "config", "deny.json")
+		denyCommandList, denyFileList, err := ylSettingger.ReadDenySetting(denyFilepath)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "读取黑名单设置失败，%s", err.Error())
+			return
+		}
+		commandAuditor = internal.NewAuditor("simple").
+			SetDenyCommandList(denyCommandList).
+			SetDenyFileList(denyFileList)
+	}()
+
+	startAppWg.Wait()
 
 	// 命令执行器
 	commandExecuter := internal.NewExecutor("simple").

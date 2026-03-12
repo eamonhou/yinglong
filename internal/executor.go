@@ -53,7 +53,7 @@ func (obj *OnceExecutor) SetInjector(injector Injecter) Executer {
 
 func (obj *OnceExecutor) Execute() error {
 	if len(os.Args) < 2 {
-		fmt.Printf("用法：yinglong <command>\n")
+		fmt.Fprintf(os.Stdout, "用法：yinglong <command>\n")
 		return nil
 	}
 	args := os.Args[1:]

@@ -60,23 +60,20 @@ func (obj *OnceExecutor) SetInjector(injector Injecter) Executer {
 //	@return error
 func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stdout, "用法：yinglong <command>\n")
-		return nil
+		return fmt.Errorf("用法：yinglong \"<command>\"\n")
 	}
 	args := os.Args[1:]
 
 	// 确保不是递归调用自己
 	const recursiveEnv = "YINGLONG_NESTED"
 	if os.Getenv(recursiveEnv) == "1" {
-		fmt.Fprintf(os.Stdout, "拦截到递归调用：禁止在 yinglong 内部再次运行 yinglong\n")
-		return nil
+		return fmt.Errorf("拦截到递归调用：禁止在 yinglong 内部再次运行 yinglong\n")
 	}
 
 	selfPath, _ := os.Executable()
 	selfName := filepath.Base(selfPath)
 	if filepath.Base(args[0]) == selfName {
-		fmt.Fprintf(os.Stdout, "禁止直接递归：命令中包含 %s\n", selfName)
-		return nil
+		return fmt.Errorf("禁止直接递归：命令中包含 %s\n", selfName)
 	}
 
 	// 生成完整命令
@@ -86,14 +83,12 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	var err error
 	obj.FinalCommand, err = obj.injector.Inject(obj.RawCommand)
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "密码注入失败\n")
-		return nil
+		return fmt.Errorf("密码注入失败\n")
 	}
 
 	// 审核命令
 	if pass, _ := obj.auditor.AuditCommand(obj.FinalCommand); !pass {
-		fmt.Fprintf(os.Stdout, "%s 命令禁止执行\n", obj.RawCommand)
-		return nil
+		return fmt.Errorf("%s 命令禁止执行\n", obj.RawCommand)
 	}
 
 	// 审核文件
@@ -101,20 +96,17 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	for _, token := range commandTokens {
 		isFile, isDir, err := obj.CheckShellToken(ctx, token)
 		if err != nil {
-			fmt.Fprintf(os.Stdout, "检查命令token发生错误: %v\n", err)
-			return nil
+			return fmt.Errorf("检查命令token发生错误: %v\n", err)
 		}
 		if !isFile && !isDir { //不是文件
 			continue
 		}
 		pass, err := obj.auditor.AuditFile(token)
 		if err != nil {
-			fmt.Fprintf(os.Stdout, "审核命令发生错误: %v\n", err)
-			return nil
+			return fmt.Errorf("审核命令发生错误: %w\n", err)
 		}
 		if !pass {
-			fmt.Fprintf(os.Stdout, "%s 不允许访问\n", token)
-			return nil
+			return fmt.Errorf("%s 不允许访问\n", token)
 		}
 	}
 
@@ -135,15 +127,10 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 
 	// 检查是否是超时导致退出
 	if ctx.Err() == context.DeadlineExceeded {
-		fmt.Fprintf(os.Stderr, "命令执行超时\n")
-		// 124 超时退出码
-		os.Exit(124)
+		return fmt.Errorf("命令执行超时\n")
 	}
 	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitError.ExitCode())
-		}
-		os.Exit(1)
+		return err
 	}
 	return nil
 }

@@ -11,15 +11,23 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	ctx := context.Background()
 
 	// 获取程序所在目录的绝对路径
 	exePath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "获取程序路径失败：%v\n", err)
-		return
+		fmt.Fprintf(os.Stderr, "获取程序路径失败：%v\n", err)
+		return 1
 	}
 	appDir := filepath.Dir(exePath)
+
+	// 【新增】确保必须的目录存在，防止运行崩溃
+	os.MkdirAll(filepath.Join(appDir, "log"), 0755)
+	os.MkdirAll(filepath.Join(appDir, "config"), 0755)
 
 	// DEV
 	// appDir = ""
@@ -35,17 +43,17 @@ func main() {
 
 	startAppWg := &sync.WaitGroup{}
 
-	var passInjector internal.Injecter
+	var commandInjector internal.Injecter
 	startAppWg.Add(1)
 	go func() {
 		defer startAppWg.Done()
 		// 密码注入器
 		secrets, err := ylSettingger.ReadPasswordSetting(passFilepath)
 		if err != nil {
-			fmt.Fprintf(os.Stdout, "读取密码设置失败，%s", err.Error())
+			fmt.Fprintf(os.Stderr, "读取密码设置失败，%s", err.Error())
 			return
 		}
-		passInjector = internal.NewInjector("simple").SetRelationMap(secrets)
+		commandInjector = internal.NewInjector("simple").SetRelationMap(secrets)
 	}()
 
 	var commandAuditor internal.Auditer
@@ -56,7 +64,7 @@ func main() {
 		denyFilepath := filepath.Join(appDir, "config", "deny.json")
 		denyCommandList, denyFileList, err := ylSettingger.ReadDenySetting(denyFilepath)
 		if err != nil {
-			fmt.Fprintf(os.Stdout, "读取黑名单设置失败，%s", err.Error())
+			fmt.Fprintf(os.Stderr, "读取黑名单设置失败，%s", err.Error())
 			return
 		}
 		commandAuditor = internal.NewAuditor("simple").
@@ -66,6 +74,16 @@ func main() {
 
 	startAppWg.Wait()
 
+	// 判断初始化是否成功
+	if internal.IsNil(commandInjector) {
+		fmt.Fprintf(os.Stderr, "注入器初始化失败\n")
+		return 1
+	}
+	if internal.IsNil(commandAuditor) {
+		fmt.Fprintf(os.Stderr, "注入器初始化失败\n")
+		return 1
+	}
+
 	// 设置命令执行超时时间
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60*3)
 	defer cancel()
@@ -74,7 +92,11 @@ func main() {
 	commandExecuter := internal.NewExecutor("simple").
 		SetLogger(ylLogger).
 		SetAuditor(commandAuditor).
-		SetInjector(passInjector)
+		SetInjector(commandInjector)
 
-	commandExecuter.Execute(ctx)
+	if err := commandExecuter.Execute(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "执行命令失败: %v", err)
+		return 1
+	}
+	return 0
 }

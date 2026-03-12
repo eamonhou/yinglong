@@ -43,7 +43,7 @@ func (obj *SimpleSetting) ReadPasswordSetting(filepath string) (map[string]strin
 	if err != nil {
 		return nil, err
 	}
-	defer passFp.Close()
+	// defer passFp.Close()
 
 	result := make(map[string]string)
 	err = json.NewDecoder(passFp).Decode(&result)
@@ -68,7 +68,7 @@ func (obj *SimpleSetting) ReadDenySetting(filepath string) (map[string]struct{},
 	if err != nil {
 		return nil, nil, fmt.Errorf("打开黑名单配置文件失败：%w\n", err)
 	}
-	defer denyFp.Close()
+	// defer denyFp.Close()
 
 	err = json.NewDecoder(denyFp).Decode(&denies)
 	if err != nil {

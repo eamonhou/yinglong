@@ -8,8 +8,9 @@ import (
 )
 
 type Logger interface {
-	Print(level string, content string)
+	Print(level string, content string) error
 	SetFile(filepath string) Logger
+	Close() error
 }
 
 func NewLogger(kind string) Logger {
@@ -39,13 +40,23 @@ func (obj *SimpleLog) SetFile(filepath string) Logger {
 	if err != nil {
 		return nil
 	}
-	defer fp.Close()
+	// defer fp.Close()
 
 	obj.filepath = filepath
 	obj.fp = fp
 	return obj
 }
 
-func (obj *SimpleLog) Print(level, content string) {
-	io.WriteString(obj.fp, fmt.Sprintf("[%s] %s %s", time.Now().Format("2006-01-02 15:04:05"), level, content))
+func (obj *SimpleLog) Print(level, content string) error {
+	if _, err := io.WriteString(obj.fp, fmt.Sprintf("[%s %s] %s\n", time.Now().Format("2006-01-02 15:04:05"), level, content)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (obj *SimpleLog) Close() error {
+	if err := obj.fp.Close(); err != nil {
+		return err
+	}
+	return nil
 }

@@ -49,7 +49,9 @@ func (obj *SimpleInjector) Inject(raw string) (string, error) {
 		obj.strBuilder.WriteString("{{")
 		obj.strBuilder.WriteString(k)
 		obj.strBuilder.WriteString("}}")
-		result = strings.ReplaceAll(result, obj.strBuilder.String(), v)
+		placeholder := obj.strBuilder.String()
+		obj.strBuilder.Reset()
+		result = strings.ReplaceAll(result, placeholder, v)
 	}
 	return result, nil
 }

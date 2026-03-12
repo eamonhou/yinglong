@@ -27,6 +27,7 @@ func main() {
 	// 初始化日志类
 	logFilepath := filepath.Join(appDir, "log", "yl_history.log")
 	ylLogger := internal.NewLogger("simple").SetFile(logFilepath)
+	defer ylLogger.Close()
 
 	// 初始化设置类
 	passFilepath := filepath.Join(appDir, "config", "password.json")

@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/shlex"
 )
 
 // Executer 命令执行方式
@@ -80,14 +82,41 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	// 生成完整命令
 	obj.RawCommand = strings.Join(args, " ")
 
+	// 注入密码
+	var err error
+	obj.FinalCommand, err = obj.injector.Inject(obj.RawCommand)
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "密码注入失败\n")
+		return nil
+	}
+
 	// 审核命令
-	if pass, _ := obj.auditor.AuditCommand(obj.RawCommand); !pass {
+	if pass, _ := obj.auditor.AuditCommand(obj.FinalCommand); !pass {
 		fmt.Fprintf(os.Stdout, "%s 命令禁止执行\n", obj.RawCommand)
 		return nil
 	}
 
-	// 注入密码
-	obj.FinalCommand, _ = obj.injector.Inject(obj.RawCommand)
+	// 审核文件
+	commandTokens, err := shlex.Split(obj.FinalCommand)
+	for _, token := range commandTokens {
+		isFile, isDir, err := obj.CheckShellToken(ctx, token)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "检查命令token发生错误: %v\n", err)
+			return nil
+		}
+		if !isFile && !isDir { //不是文件
+			continue
+		}
+		pass, err := obj.auditor.AuditFile(token)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "审核命令发生错误: %v\n", err)
+			return nil
+		}
+		if !pass {
+			fmt.Fprintf(os.Stdout, "%s 不允许访问\n", token)
+			return nil
+		}
+	}
 
 	// 创建一个命令对象
 	// 使用 sh -c 可以让你执行带管道的复杂命令
@@ -96,13 +125,13 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	// 注入防止递归的环境变量
 	obj.Cmd.Env = append(os.Environ(), recursiveEnv+"=1")
 
-	obj.logger.Print("info", obj.FinalCommand)
+	obj.logger.Print("info", obj.RawCommand)
 
 	// 将子进程的标准输出/错误直接关联到当前进程
 	obj.Cmd.Stdout = os.Stdout
 	obj.Cmd.Stderr = os.Stderr
 
-	err := obj.Cmd.Run()
+	err = obj.Cmd.Run()
 
 	// 检查是否是超时导致退出
 	if ctx.Err() == context.DeadlineExceeded {
@@ -117,4 +146,38 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// CheckShellToken 检查 token 是否为现存的文件或目录
+// 返回值:
+// isFile: true 表示是普通文件
+// isDir:  true 表示是目录
+// err:    如果 token 既不是现存文件也不是目录（比如 "-la", 或不存在的路径），则返回 err
+func (obj *OnceExecutor) CheckShellToken(ctx context.Context, token string) (isFile bool, isDir bool, err error) {
+	// 1. 处理 Shell 的波浪号 (~)
+	if strings.HasPrefix(token, "~/") {
+		if homeDir, e := os.UserHomeDir(); e == nil {
+			token = filepath.Join(homeDir, token[2:])
+		}
+	} else if token == "~" {
+		if homeDir, e := os.UserHomeDir(); e == nil {
+			token = homeDir
+		}
+	}
+
+	// 2. 检查文件/目录属性
+	info, err := os.Stat(token)
+	if err != nil {
+		// 如果不存在或是个普通的命令参数(如 "-l")，os.Stat 会报错
+		if os.IsNotExist(err) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+
+	// 3. 判断类型
+	if info.IsDir() {
+		return false, true, nil
+	}
+	return true, false, nil
 }

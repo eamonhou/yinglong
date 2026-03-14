@@ -12,23 +12,14 @@ type Settingger interface {
 	ReadDenySetting(filepath string) (map[string]struct{}, map[string]struct{}, error)
 }
 
-func NewSettingger(kind string) Settingger {
-	var setting Settingger
-
-	switch kind {
-	case "simple":
-		setting = NewSimpleSetting()
-	default:
-		setting = NewSimpleSetting()
-	}
-	return setting
-}
-
 type SimpleSetting struct {
 	//
 }
 
-func NewSimpleSetting() *SimpleSetting {
+type SettingConfig struct {
+}
+
+func NewSimpleSetting(cfg SettingConfig) *SimpleSetting {
 	return &SimpleSetting{}
 }
 

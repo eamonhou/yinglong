@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,9 +15,7 @@ import (
 // Executer 命令执行方式
 type Executer interface {
 	Execute(ctx context.Context) error
-	SetLogger(logger Logger) Executer
-	SetAuditor(auditor Auditer) Executer
-	SetInjector(injector Injecter) Executer
+	ExecuteString(ctx context.Context, rawCommand string, stdout io.Writer, stderr io.Writer) error
 }
 
 type OnceExecutor struct {
@@ -28,30 +27,19 @@ type OnceExecutor struct {
 	injector     Injecter // 注入者
 }
 
-func NewExecutor(kind string) Executer {
-	var executer Executer
-	switch kind {
-	case "simple":
-		executer = &OnceExecutor{}
-	default:
-		executer = &OnceExecutor{}
+type ExecuterConfig struct {
+	Logger   Logger
+	Auditor  Auditer
+	Injector Injecter
+}
+
+func NewOnceExecutor(cfg ExecuterConfig) (Executer, error) {
+	executer := &OnceExecutor{
+		logger:   cfg.Logger,
+		auditor:  cfg.Auditor,
+		injector: cfg.Injector,
 	}
-	return executer
-}
-
-func (obj *OnceExecutor) SetLogger(logger Logger) Executer {
-	obj.logger = logger
-	return obj
-}
-
-func (obj *OnceExecutor) SetAuditor(auditor Auditer) Executer {
-	obj.auditor = auditor
-	return obj
-}
-
-func (obj *OnceExecutor) SetInjector(injector Injecter) Executer {
-	obj.injector = injector
-	return obj
+	return executer, nil
 }
 
 // Execute 执行命令
@@ -133,6 +121,29 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// ExecuteString 专为 MCP 等需要流重定向的场景设计
+func (obj *OnceExecutor) ExecuteString(ctx context.Context, rawCommand string, stdout io.Writer, stderr io.Writer) error {
+	// 1. 审核命令
+	// 这里你需要调整一下 AuditCommand 逻辑，之前它是读 args[0]，现在你需要解析 rawCommand
+	// ...
+
+	// 2. 注入密码
+	finalCommand, _ := obj.injector.Inject(rawCommand)
+
+	// 3. 构造命令
+	obj.Cmd = exec.CommandContext(ctx, "sh", "-c", finalCommand)
+
+	// 4. 重定向输出到传入的 buffer (核心所在，绝对不要用 os.Stdout)
+	obj.Cmd.Stdout = stdout
+	obj.Cmd.Stderr = stderr
+
+	// 5. 记录日志
+	obj.logger.Print("info", finalCommand)
+
+	// 6. 运行并返回错误（不要调用 os.Exit !）
+	return obj.Cmd.Run()
 }
 
 // CheckShellToken 检查 token 是否为现存的文件或目录

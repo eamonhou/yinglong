@@ -9,20 +9,7 @@ import (
 
 type Logger interface {
 	Print(level string, content string) error
-	SetFile(filepath string) Logger
 	Close() error
-}
-
-func NewLogger(kind string) Logger {
-	var yllog Logger
-
-	switch kind {
-	case "simple":
-		yllog = NewSimpleLog()
-	default:
-		yllog = NewSimpleLog()
-	}
-	return yllog
 }
 
 // yinglong专用日志
@@ -31,20 +18,25 @@ type SimpleLog struct {
 	fp       *os.File //日志文件指针
 }
 
-func NewSimpleLog() *SimpleLog {
-	return &SimpleLog{}
+// 定义选项类型：一个能修改 SimpleLog 指针的函数
+type LoggerConfig struct {
+	Filepath string
 }
 
-func (obj *SimpleLog) SetFile(filepath string) Logger {
-	fp, err := os.OpenFile(filepath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		return nil
+func NewSimpleLog(cfg LoggerConfig) (*SimpleLog, error) {
+	// 设置默认值
+	logObj := &SimpleLog{
+		filepath: cfg.Filepath,
+		fp:       os.Stderr,
 	}
-	// defer fp.Close()
-
-	obj.filepath = filepath
-	obj.fp = fp
-	return obj
+	if cfg.Filepath != "" {
+		fp, err := os.OpenFile(cfg.Filepath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			return nil, fmt.Errorf("打开日志文件失败：%w", err)
+		}
+		logObj.fp = fp
+	}
+	return logObj, nil
 }
 
 func (obj *SimpleLog) Print(level, content string) error {

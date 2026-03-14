@@ -20,7 +20,7 @@ func main() {
 
 	mdFilepath := filepath.Join("open_claw_ruler.md")
 
-	mdFp, err := os.OpenFile(mdFilepath, os.O_RDONLY, 0666)
+	mdFp, err := os.OpenFile(mdFilepath, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -6,7 +6,6 @@ import (
 
 type Injecter interface {
 	Inject(raw string) (string, error)
-	SetRelationMap(relationMap map[string]string) Injecter
 }
 
 // 简单注入器
@@ -15,27 +14,14 @@ type SimpleInjector struct {
 	relationMap map[string]string
 }
 
-func NewInjector(kind string) Injecter {
-	var injecter Injecter
-
-	strBuilder := strings.Builder{}
-
-	switch kind {
-	case "simple":
-		injecter = &SimpleInjector{
-			strBuilder: strBuilder,
-		}
-	default:
-		injecter = &SimpleInjector{
-			strBuilder: strBuilder,
-		}
-	}
-	return injecter
+type InjectorConfig struct {
+	RelationMap map[string]string
 }
 
-func (obj *SimpleInjector) SetRelationMap(relationMap map[string]string) Injecter {
-	obj.relationMap = relationMap
-	return obj
+func NewInjector(cfg InjectorConfig) Injecter {
+	return &SimpleInjector{
+		relationMap: cfg.RelationMap,
+	}
 }
 
 // Inject 注入

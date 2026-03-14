@@ -58,7 +58,9 @@ func run() int {
 			fmt.Fprintf(os.Stderr, "读取密码设置失败，%s", err.Error())
 			return
 		}
-		commandInjector = internal.NewInjector("simple").SetRelationMap(secrets)
+		commandInjector = internal.NewInjector(internal.InjectorConfig{
+			RelationMap: secrets,
+		})
 	}()
 
 	// 命令审核者

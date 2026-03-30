@@ -84,7 +84,7 @@ func (obj *OnceExecutor) Execute(ctx context.Context) error {
 	for _, token := range commandTokens {
 		isFile, isDir, err := obj.CheckShellToken(ctx, token)
 		if err != nil {
-			return fmt.Errorf("检查命令token发生错误: %v\n", err)
+			return fmt.Errorf("检查命令token发生错误: %w\n", err)
 		}
 		if !isFile && !isDir { //不是文件
 			continue

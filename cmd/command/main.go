@@ -25,7 +25,7 @@ func run() int {
 	}
 	appDir := filepath.Dir(exePath)
 
-	// 【新增】确保必须的目录存在，防止运行崩溃
+	// 检查目录是否存在
 	os.MkdirAll(filepath.Join(appDir, "log"), 0755)
 	os.MkdirAll(filepath.Join(appDir, "config"), 0755)
 
@@ -42,13 +42,13 @@ func run() int {
 	}
 	defer ylLogger.Close()
 
-	// 初始化设置类
+	// 读取配置模块
 	passFilepath := filepath.Join(appDir, "config", "password.json")
 	ylSettingger := internal.NewSimpleSetting(internal.SettingConfig{})
 
 	startAppWg := &sync.WaitGroup{}
 
-	// 密码注入器
+	// 命令注入模块
 	var commandInjector internal.Injecter
 	startAppWg.Add(1)
 	go func() {
@@ -63,7 +63,7 @@ func run() int {
 		})
 	}()
 
-	// 命令审核者
+	// 命令审核模块
 	var commandAuditor internal.Auditer
 	startAppWg.Add(1)
 	go func() {
@@ -95,7 +95,7 @@ func run() int {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60*3)
 	defer cancel()
 
-	// 命令执行器
+	// 命令执行模块
 	commandExecuter, _ := internal.NewOnceExecutor(internal.ExecuterConfig{
 		Logger:   ylLogger,
 		Auditor:  commandAuditor,
